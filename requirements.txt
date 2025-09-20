@@ -6,3 +6,7 @@ numpy
 pillow
 pdfplumber
 scikit-learn
+pandas
+numpy
+plotly
+openpyxl
