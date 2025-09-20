@@ -1,29 +1,30 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-import shutil
-from omr_evaluator import evaluate_omr_sheet
+import streamlit as st
+import requests
+import pandas as pd
+import plotly.express as px
 
-app = FastAPI()
+st.set_page_config(page_title="Automated OMR Evaluation", layout="wide")
+st.title("📊 Automated OMR Evaluation System")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+uploaded_file = st.file_uploader("Upload OMR sheet image", type=["jpg","jpeg","png"])
+if uploaded_file:
+    if st.button("Evaluate"):
+        files = {"file": (uploaded_file.name, uploaded_file, "image/jpeg")}
+        try:
+            response = requests.post("http://localhost:8000/evaluate_omr/", files=files)
+            if response.status_code == 200:
+                result = response.json()
+                total_score = result["total_score"]
+                st.subheader("Total Score")
+                st.progress(total_score / 100)
 
-@app.get("/")
-def read_root():
-    return {"message": "OMR Evaluation API is running"}
-
-@app.post("/evaluate_omr/")
-async def evaluate_omr(file: UploadFile = File(...)):
-    file_location = f"temp_{file.filename}"
-    with open(file_location, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    answer_key = {i: 'A' for i in range(1, 101)} 
-
-    result = evaluate_omr_sheet(file_location, answer_key)
-    return result
+                subject_scores = result["subject_scores"]
+                df = pd.DataFrame(list(subject_scores.items()), columns=["Subject", "Score"])
+                fig = px.bar(df, x="Subject", y="Score", color="Score",
+                             color_continuous_scale="Viridis", text="Score")
+                st.plotly_chart(fig, use_container_width=True)
+                st.table(df)
+            else:
+                st.error("Error evaluating sheet")
+        except Exception as e:
+            st.error(f"Server Error: {e}")
